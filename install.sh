@@ -611,11 +611,15 @@ if [[ "${BUILD_FROM_SOURCE}" == "1" ]]; then
   rustup toolchain install stable >/dev/null
   rustup default stable >/dev/null
   cd "${ROOT_DIR}"
-  log "building innerwarden-sensor + innerwarden-agent + innerwarden-ctl (release)..."
-  cargo build --release -p innerwarden-sensor -p innerwarden-agent -p innerwarden-ctl
+  log "building innerwarden-sensor + innerwarden-agent + innerwarden-ctl + iw-guard (release)..."
+  cargo build --release -p innerwarden-sensor -p innerwarden-agent -p innerwarden-ctl -p iw-guard
   IW_SENSOR_BIN="${ROOT_DIR}/target/release/innerwarden-sensor"
   IW_AGENT_BIN="${ROOT_DIR}/target/release/innerwarden-agent"
   IW_CTL_BIN="${ROOT_DIR}/target/release/innerwarden-ctl"
+  # The free guardrail binary — becomes the `innerwarden` CLI (Model A): it runs
+  # the free verbs (check/agents/setup/notify/dashboard) natively and DELEGATES
+  # host commands to innerwarden-ctl. So one `innerwarden` command does everything.
+  IW_GUARD_BIN="${ROOT_DIR}/target/release/iw-guard"
   if [[ "${SUPERVISED}" == "true" ]]; then
     log "building innerwarden-supervisor (release)..."
     cargo build --release -p innerwarden-supervisor
@@ -672,6 +676,14 @@ else
   IW_SENSOR_BIN="${TMP_DIR}/innerwarden-sensor"
   IW_AGENT_BIN="${TMP_DIR}/innerwarden-agent"
   IW_CTL_BIN="${TMP_DIR}/innerwarden-ctl"
+
+  # The free guardrail binary — becomes the `innerwarden` CLI (Model A). BEST-EFFORT:
+  # older releases do not ship iw-guard for every platform yet, so a 404 here is not
+  # fatal — the install falls back to ctl-as-`innerwarden` below and still works.
+  if curl -fsSL --output "${TMP_DIR}/iw-guard" \
+       "https://github.com/${GITHUB_REPO}/releases/download/${IW_VERSION}/iw-guard-${PLATFORM}-${ARCH}" 2>/dev/null; then
+    IW_GUARD_BIN="${TMP_DIR}/iw-guard"
+  fi
 fi
 
 if [[ "$OS_TYPE" == "Darwin" ]]; then
@@ -741,7 +753,17 @@ log "installing binaries to ${BIN_DIR}"
 run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_SENSOR_BIN}" "${SENSOR_BIN}"
 run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_AGENT_BIN}"  "${AGENT_BIN}"
 run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_CTL_BIN}"    "${BIN_DIR}/innerwarden-ctl"
-run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_CTL_BIN}"    "${BIN_DIR}/innerwarden"
+# Model A: `innerwarden` (the single CLI) is the FREE guardrail binary when it is
+# available — it runs the free verbs (check/agents/setup/notify/dashboard) natively
+# and DELEGATES host commands to innerwarden-ctl (installed above), so one command
+# does everything. When the free binary is not in this release yet, fall back to
+# installing ctl as `innerwarden` (today's behaviour) so the install never breaks.
+if [[ -n "${IW_GUARD_BIN:-}" && -f "${IW_GUARD_BIN}" ]]; then
+  run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_GUARD_BIN}" "${BIN_DIR}/innerwarden"
+  log "'innerwarden' CLI = the guardrail (delegates host commands to innerwarden-ctl)"
+else
+  run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_CTL_BIN}"   "${BIN_DIR}/innerwarden"
+fi
 
 # ── Drop the install-facing agent guide (spec 082) ───────────────────────
 # /etc/innerwarden/AGENTS.md is the playbook an AI coding agent reads to
