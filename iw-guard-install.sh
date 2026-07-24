@@ -33,7 +33,7 @@ INSTALL_DIR="${IW_GUARD_DIR:-$HOME/.local/bin}"
 # not provisioned for this channel yet, so we keep the sha256 guarantee and tell
 # you how to verify by hand (see packaging/INSTALL.md). Override for a custom
 # channel with IW_GUARD_PUBKEY.
-IW_RELEASE_PUBKEY_B64="${IW_GUARD_PUBKEY:-yf58o+MQluj7MwTlW+hB9tfLQk9df0iUeGxPbmAIFM8=}"
+IW_RELEASE_PUBKEY_B64="${IW_GUARD_PUBKEY:-vR3bZQMGNQ7tfoKirl4mbBCE6DekmmEFADL5g984PC4=}"
 
 say()  { printf '  %s\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
