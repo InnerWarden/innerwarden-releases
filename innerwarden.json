@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "description": "InnerWarden Community Edition: a free, source-available AI-agent guardrail that screens shell commands and MCP tool calls before execution. No admin rights, no kernel.",
+  "homepage": "https://innerwarden.com",
+  "license": "Freeware",
+  "notes": [
+    "Per-user install, no admin rights. Run 'innerwarden setup' for the guided onboarding.",
+    "Tracks the rolling 'iw-guard' release; run 'scoop update innerwarden' after a new cut."
+  ],
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-x86_64.exe#/innerwarden.exe",
+      "hash": "464fdf796c519bd1cb9588faa7e3f2b6d3a4691445931a48bcf0fe1392d9d8d4"
+    },
+    "arm64": {
+      "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-aarch64.exe#/innerwarden.exe",
+      "hash": "6fc1ad6e69c413ac6f0557832f0d5df60a2e0b4020139d5e67e721b4653c6ccb"
+    }
+  },
+  "bin": [
+    [
+      "innerwarden.exe"
+    ],
+    [
+      "innerwarden.exe",
+      "iw"
+    ],
+    [
+      "innerwarden.exe",
+      "iw-guard"
+    ]
+  ],
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-x86_64.exe#/innerwarden.exe",
+        "hash": {
+          "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-x86_64.exe.sha256"
+        }
+      },
+      "arm64": {
+        "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-aarch64.exe#/innerwarden.exe",
+        "hash": {
+          "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-aarch64.exe.sha256"
+        }
+      }
+    }
+  }
+}
