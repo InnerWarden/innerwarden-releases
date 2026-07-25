@@ -72,6 +72,35 @@ if [[ -f /etc/os-release ]]; then
   DISTRO="$(. /etc/os-release && echo "$NAME $VERSION_ID" 2>/dev/null)"
 fi
 
+# ── Platform gate ────────────────────────────────────────────────────────
+# Active Defence is the Linux kernel-enforcement tier: its whole job is eBPF/LSM
+# plus systemd, neither of which exists on macOS. Releases from v0.16.4 onward
+# ship Linux binaries only, so on macOS the download step would 404 and report
+# "the release may not exist yet" — blaming the release for a platform that was
+# never supported.
+#
+# This runs BEFORE the sudo prompt below: asking someone for their root password
+# and only then telling them their OS is unsupported is the wrong order. Ahead of
+# it, --simulate stays available everywhere, since a dry preview touches nothing.
+if [[ "$OS_TYPE" == "Darwin" && "${SIMULATE}" -ne 1 ]]; then
+  cat >&2 <<'EOF'
+
+InnerWarden Active Defence is Linux-only.
+
+Its enforcement is eBPF/LSM in the kernel plus systemd units, neither of which
+exists on macOS, so there is nothing to install here.
+
+On macOS, run the free userspace guardrail instead:
+
+  npm install -g innerwarden
+  # or: curl -fsSL https://innerwarden.com/free | sh
+
+Active Defence needs a Linux host (x86_64 or aarch64) with systemd.
+
+EOF
+  exit 1
+fi
+
 # ── Sudo handling ────────────────────────────────────────────────────────
 # Instead of re-execing the entire script with sudo (which kills stdin/tty),
 # we validate sudo once and prefix privileged commands with $SUDO.
@@ -317,15 +346,16 @@ if [[ "$OS_TYPE" != "Linux" && "$OS_TYPE" != "Darwin" ]]; then
   fail "this installer supports Linux and macOS (Darwin) hosts only"
 fi
 
+# Simulation is a dry preview of the flow (no downloads, no system changes), so
+# it stays available on any host — including a macOS laptop. Keep it ahead of the
+# platform gate below.
 if [[ "${SIMULATE}" -eq 1 ]]; then
   run_simulated_setup_flow
   exit 0
 fi
 
-if [[ "$OS_TYPE" != "Darwin" ]]; then
-  if ! command -v systemctl >/dev/null 2>&1; then
-    fail "systemctl not found; this installer requires systemd on Linux"
-  fi
+if ! command -v systemctl >/dev/null 2>&1; then
+  fail "systemctl not found; this installer requires systemd on Linux"
 fi
 
 if [[ "$(id -u)" -eq 0 ]]; then
