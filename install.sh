@@ -41,8 +41,20 @@ SIMULATE_MODE="basic"
 # aborts the whole install with "SUPERVISED: unbound variable". Override via the
 # --supervised flag or the SUPERVISED env var.
 SUPERVISED="${SUPERVISED:-false}"
+# Active Defence (the paid tier) is installed by the SAME command, gated on a
+# licence. Until now there was no path at all: this installer downloaded only
+# sensor/agent/ctl, so a customer who bought Active Defence had no way to get the
+# paid binaries — the watchdog (anti-tamper), config-sign (which arms the kernel
+# execution gate) and dns-guard were simply never installed, licence or not. The
+# only installer that placed them expected a hand-assembled tarball and lived in a
+# private repo.
+#
+# One command, licence decides the tier, and running it on an existing free install
+# upgrades in place.
+LICENSE_SRC="${LICENSE_SRC:-}"
 for arg in "$@"; do
   case "$arg" in
+    --license=*) LICENSE_SRC="${arg#--license=}" ;;
     --with-integrations) WITH_INTEGRATIONS=1 ;;
     --canary) CANARY=1 ;;
     --verbose) VERBOSE=1 ;;
@@ -70,6 +82,24 @@ KERNEL="$(uname -r)"
 DISTRO=""
 if [[ -f /etc/os-release ]]; then
   DISTRO="$(. /etc/os-release && echo "$NAME $VERSION_ID" 2>/dev/null)"
+fi
+
+# ── Active Defence preflight ─────────────────────────────────────────────
+# Validate the licence BEFORE anything is installed. A bad path or a malformed file
+# discovered halfway through leaves a host carrying paid daemons that will not
+# start, and the operator then has to work out which half applied.
+if [[ -n "${LICENSE_SRC}" ]]; then
+  if [[ ! -f "${LICENSE_SRC}" ]]; then
+    echo "innerwarden: licence file not found: ${LICENSE_SRC}" >&2
+    exit 1
+  fi
+  if ! grep -q '"signature"' "${LICENSE_SRC}" 2>/dev/null; then
+    echo "innerwarden: that does not look like an InnerWarden licence: ${LICENSE_SRC}" >&2
+    echo "  A licence is a JSON document with customer_id, features, validity and a" >&2
+    echo "  signature. It arrives by email after purchase, or from" >&2
+    echo "  https://innerwarden.com/activate" >&2
+    exit 1
+  fi
 fi
 
 # ── Platform gate ────────────────────────────────────────────────────────
@@ -699,6 +729,18 @@ else
   download_asset "innerwarden-agent"  "${TMP_DIR}/innerwarden-agent"  "${IW_VERSION}" "${ARCH}" "${PLATFORM}"
   download_asset "innerwarden-ctl"    "${TMP_DIR}/innerwarden-ctl"    "${IW_VERSION}" "${ARCH}" "${PLATFORM}"
 
+  # Active Defence binaries. Only fetched when a licence was supplied, so a free
+  # install downloads exactly what it did before. These are the three that were
+  # unreachable through any customer-facing path:
+  #   watchdog     anti-tamper supervision (the licence gates it)
+  #   config-sign  arms and rehearses the kernel execution gate
+  #   dns-guard    domain pre-authorisation resolver
+  if [[ -n "${LICENSE_SRC}" ]]; then
+    for paid in innerwarden-watchdog innerwarden-config-sign innerwarden-dns-guard; do
+      download_asset "$paid" "${TMP_DIR}/${paid}" "${IW_VERSION}" "${ARCH}" "${PLATFORM}"
+    done
+  fi
+
   IW_SENSOR_BIN="${TMP_DIR}/innerwarden-sensor"
   IW_AGENT_BIN="${TMP_DIR}/innerwarden-agent"
   IW_CTL_BIN="${TMP_DIR}/innerwarden-ctl"
@@ -772,6 +814,21 @@ run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "
 run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_AGENT_BIN}"  "${AGENT_BIN}"
 run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_CTL_BIN}"    "${BIN_DIR}/innerwarden-ctl"
 run_root install -o "${INSTALL_USER:-root}" -g "${INSTALL_GROUP:-root}" -m 755 "${IW_CTL_BIN}"    "${BIN_DIR}/innerwarden"
+
+# Active Defence binaries + licence. Skipped entirely without a licence, so this
+# adds nothing to a free install.
+if [[ -n "${LICENSE_SRC}" ]]; then
+  log "installing Active Defence binaries"
+  for paid in innerwarden-watchdog innerwarden-config-sign innerwarden-dns-guard; do
+    if [[ -f "${TMP_DIR}/${paid}" ]]; then
+      run_root install -o root -g root -m 755 "${TMP_DIR}/${paid}" "${BIN_DIR}/${paid}"
+    fi
+  done
+  # 0600 root: the licence is a signed entitlement, not a public file.
+  log "installing licence to ${CONFIG_DIR}/license.key"
+  run_root install -d -m 755 "${CONFIG_DIR}"
+  run_root install -o root -g root -m 600 "${LICENSE_SRC}" "${CONFIG_DIR}/license.key"
+fi
 
 # ── Drop the install-facing agent guide (spec 082) ───────────────────────
 # /etc/innerwarden/AGENTS.md is the playbook an AI coding agent reads to
@@ -1420,9 +1477,104 @@ else
     fi
   fi
 
+  # -- Active Defence: the anti-tamper watchdog ------------------------
+  # This is what makes the tier Enterprise and what the licence gates. It
+  # supervises the agent and detects an unauthorised disable, so it runs as
+  # root and is turned on deliberately.
+  #
+  # The unit is written inline rather than shipped as a file because this
+  # installer is self-contained by design: it is fetched over curl with no
+  # accompanying tarball.
+  if [[ -n "${LICENSE_SRC}" ]] && [[ -x "${BIN_DIR}/innerwarden-watchdog" ]]; then
+    log "writing the Active Defence watchdog unit"
+    tmp_unit="$(mktemp)"
+    cat > "${tmp_unit}" <<'WDUNIT'
+[Unit]
+Description=Inner Warden - Watchdog (anti-tamper supervision, Active Defence)
+After=network-online.target
+Wants=network-online.target
+Documentation=https://innerwarden.com/docs/installation
+
+[Service]
+Type=simple
+# Root: it supervises the agent and must survive an attempt to stop it.
+User=root
+Group=root
+EnvironmentFile=-/etc/innerwarden/agent.env
+ExecStart=/usr/local/bin/innerwarden-watchdog
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+KillSignal=SIGTERM
+SendSIGKILL=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=innerwarden-watchdog
+
+[Install]
+WantedBy=multi-user.target
+WDUNIT
+    run_root install -o root -g root -m 644 "${tmp_unit}" "/etc/systemd/system/innerwarden-watchdog.service"
+    rm -f "${tmp_unit}"
+    run_root systemctl daemon-reload
+
+    # The watchdog exits when the licence does not grant it, so a failure here
+    # is almost always an entitlement problem. Say that, rather than a generic
+    # error: the licence must list BOTH 'watchdog' and 'lsm_advanced', and one
+    # missing entry is a latent outage that only surfaces on the next restart.
+    if run_root systemctl enable --now innerwarden-watchdog >/dev/null 2>&1 \
+       && run_root systemctl is-active --quiet innerwarden-watchdog; then
+      log "Active Defence watchdog running"
+    else
+      log "WARNING: the watchdog did not start. Check: sudo journalctl -u innerwarden-watchdog -n 50"
+      log "         Most likely the licence does not grant it: it must list 'watchdog'"
+      log "         (and 'lsm_advanced' for the execution gate). The rest of the install is fine."
+    fi
+  fi
+
   if [[ "${WITH_INTEGRATIONS}" -eq 1 ]]; then
     install_integrations
   fi
+fi
+
+
+# -- Next steps, per tier -------------------------------------------------
+# A paid install that ends with the free tier's guidance leaves the customer not
+# knowing the dashboard needs two commands, or that the execution gate exists and
+# is deliberately unarmed. That silence produced the most common report about this
+# product: "I installed Enterprise and got the old dashboard".
+if [[ -n "${LICENSE_SRC}" ]]; then
+  cat <<'ADSTEPS'
+
+Active Defence is installed. Two things next, in this order.
+
+1. The dashboard. Both commands are needed, and neither exposes anything:
+
+     innerwarden dashboard interface new   # serve the current interface, not legacy
+     innerwarden dashboard login           # it is fail-closed without a login
+     innerwarden dashboard                 # then: URL + the exact SSH tunnel
+
+   Skipping either lands you on the legacy dashboard, or on a 401.
+
+2. The Execution Gate (the kernel moat). Never flip straight to enforce:
+
+     innerwarden-config-sign exec-gate scan                    # baseline the allowlist
+     innerwarden-config-sign exec-gate seed-maintenance --apply # trust OS updaters
+     innerwarden-config-sign exec-gate arm --observe --apply    # logs, blocks nothing
+     innerwarden-config-sign exec-gate rehearse --window 604800 # must be zero-deny
+     innerwarden-config-sign exec-gate arm --apply              # then enforce
+
+   Safety valve, any time:
+     innerwarden-config-sign exec-gate disarm --apply
+
+   The gate needs `bpf` in /sys/kernel/security/lsm. Check it before trusting an
+   armed state:
+     tr ',' '\n' < /sys/kernel/security/lsm | grep -x bpf
+
+Optional daemons, when you are ready:
+     systemctl enable --now innerwarden-dns-guard         # observe first
+     systemctl enable --now innerwarden-exec-gate-watch   # live classify/approve
+ADSTEPS
 fi
 
 # If canary was requested but fell back to stable, try to upgrade just the CTL
