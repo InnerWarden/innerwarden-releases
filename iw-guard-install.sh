@@ -62,23 +62,36 @@ find_ed25519_openssl() {
 }
 
 # Verify the Ed25519 signature of $1 (the downloaded binary, still in $tmp)
-# against the pinned public key. Hard-fails ONLY on a real mismatch; a missing
-# key / tool / sidecar downgrades to the sha256 guarantee with an honest note,
-# so we never block an install we merely could not cryptographically check.
+# against the pinned public key.
+#
+# When the shipped installer HAS a pinned key (it always does), a signature we
+# could not check is a hard failure, not a downgrade: skipping on a missing openssl
+# or a missing .sig lets a release-host / CDN / TLS-intercept compromise install an
+# unsigned or forged binary, and on stock macOS (LibreSSL, no Homebrew openssl) it
+# would skip verification for EVERY user. The paid installer already fails closed;
+# this matches it. An operator who genuinely cannot install openssl can opt out with
+# an explicit, logged IW_GUARD_ALLOW_UNSIGNED=1. A build with NO pinned key (dev) is
+# the only soft path.
 verify_signature() {
   bin="$1"
   if [ -z "$IW_RELEASE_PUBKEY_B64" ]; then
     say "(signature pinning not enabled on this build - verified sha256 only; see packaging/INSTALL.md to verify by hand)"
     return 0
   fi
+  # Pinned key present -> verification is mandatory unless explicitly overridden.
   ossl="$(find_ed25519_openssl)" || {
-    say "(no OpenSSL >= 1.1.1 found to check the Ed25519 signature - verified sha256 only)"
-    say " to also verify the signature: install openssl, then see packaging/INSTALL.md"
-    return 0
+    if [ "${IW_GUARD_ALLOW_UNSIGNED:-0}" = "1" ]; then
+      say "WARNING: no capable OpenSSL found; IW_GUARD_ALLOW_UNSIGNED=1 set - installing on sha256 alone"
+      return 0
+    fi
+    fail "cannot verify the Ed25519 signature: no OpenSSL >= 1.1.1 found. Install openssl (macOS: 'brew install openssl@3') and re-run, or set IW_GUARD_ALLOW_UNSIGNED=1 to install unverified (not recommended)."
   }
   if ! curl -fsSL --output "$tmp/innerwarden.sig" "${base}/${asset}.sig" 2>/dev/null; then
-    say "(no .sig published for this asset - verified sha256 only)"
-    return 0
+    if [ "${IW_GUARD_ALLOW_UNSIGNED:-0}" = "1" ]; then
+      say "WARNING: no .sig for this asset; IW_GUARD_ALLOW_UNSIGNED=1 set - installing on sha256 alone"
+      return 0
+    fi
+    fail "no Ed25519 signature (.sig) published for this asset - refusing to install. A stable release must ship one; report this. Override with IW_GUARD_ALLOW_UNSIGNED=1 only if you accept the risk."
   fi
   # Rebuild the public-key PEM from the pinned raw key (fixed Ed25519 SPKI prefix).
   printf -- '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA%s\n-----END PUBLIC KEY-----\n' \
