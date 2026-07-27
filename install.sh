@@ -506,7 +506,7 @@ detect_platform() {
 #
 # Documented at /docs/supply-chain-security.md and on the public release
 # page. Rotating this key requires a coordinated installer + ctl release.
-INNERWARDEN_RELEASE_PEM=$'-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAyf58o+MQluj7MwTlW+hB9tfLQk9df0iUeGxPbmAIFM8=\n-----END PUBLIC KEY-----\n'
+INNERWARDEN_RELEASE_PEM=$'-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAvR3bZQMGNQ7tfoKirl4mbBCE6DekmmEFADL5g984PC4=\n-----END PUBLIC KEY-----\n'
 
 # ── Spec 048 — check that openssl can verify Ed25519 signatures ──────────────
 #
