@@ -10,11 +10,11 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-x86_64.exe#/innerwarden.exe",
-      "hash": "984e755f6947dd40492a231903696aa1c5f01b201259b90223d2008522780858"
+      "hash": "5a5d18cdd1efd2e8ba69a203e265fc8983adfda83ac0ee0b5e7878b2f49a1cae"
     },
     "arm64": {
       "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-aarch64.exe#/innerwarden.exe",
-      "hash": "fd1f14b3bba103cd581c5552ba9e2afa4839ffa32292523fd460b400c15e975c"
+      "hash": "dba31a4acf0bf47c4b388314e81c8faaf8c0d3c16db3462ff87157c8f055ad8e"
     }
   },
   "bin": [
