@@ -1,5 +1,5 @@
 {
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "InnerWarden Community Edition: a free, source-available AI-agent guardrail that screens shell commands and MCP tool calls before execution. No admin rights, no kernel.",
   "homepage": "https://innerwarden.com",
   "license": "Freeware",
@@ -10,11 +10,11 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-x86_64.exe#/innerwarden.exe",
-      "hash": "c054fc49bd80ad3af6372b42f8fa78ee60e6a5514b31aafa765d8fcc3226f3eb"
+      "hash": "63038d995be7b49bd18b19134ffb225c406f4501859bf27f72ea8cae3b062166"
     },
     "arm64": {
       "url": "https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/innerwarden-windows-aarch64.exe#/innerwarden.exe",
-      "hash": "c4679b12b2b3f489cecd7be2295b9426eaf4b6128f7f6f6767eff6ca6fbff273"
+      "hash": "53c448abc30ded4d5f5aa029a1705edf6b02bb3b4b16b5665c297da2781e4969"
     }
   },
   "bin": [
