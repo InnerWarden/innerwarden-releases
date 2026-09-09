@@ -18,8 +18,8 @@
 
 .PARAMETER Version
   Release tag. With the default Community install, "latest" resolves to the
-  rolling iw-guard tag (or pass guard-v0.16.0 to pin a frozen cut). With -Full,
-  "latest" resolves to the latest Active Defence release (or pass v0.16.0).
+  rolling iw-guard tag (or pass a guard-v<version> tag to pin a frozen cut). With -Full,
+  "latest" resolves to the latest Active Defence release (or pass a v<version> tag).
 
 .PARAMETER Full
   Install the full sensor+agent+ctl trio + boot-start service (needs Administrator).
