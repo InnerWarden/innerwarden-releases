@@ -20,6 +20,14 @@
 #   IW_GUARD_NO_HOOK=1   skip wiring the Claude Code PreToolUse hook
 set -eu
 
+# Everything this script creates is 0755 / 0644, whatever the caller's umask.
+# Ubuntu and Debian log users in with umask 0002 (USERGROUPS_ENAB), so a plain
+# `mkdir -p` made ~/.local, ~/.local/bin and the binary group-writable (775),
+# and Active Defence then refused to run this CLI (`innerwarden-ctl verify` /
+# `drill`: a path another account can write is a path that account can swap),
+# one directory per run (rc.1 install test F10, rc.2 F7).
+umask 022
+
 GITHUB_REPO="InnerWarden/innerwarden-releases"
 RELEASE_TAG="${IW_GUARD_TAG:-iw-guard}"
 INSTALL_DIR="${IW_GUARD_DIR:-$HOME/.local/bin}"
@@ -150,10 +158,38 @@ ok "sha256 verified"
 verify_signature "$tmp/innerwarden"
 
 # ── Install per-user (no sudo) ───────────────────────────────────────────────
+# Directories this script creates come out 0755 (umask 022 above). A directory
+# that already existed is the operator's and is never chmod-ed here; if it is
+# group- or world-writable we say so, with the one command that fixes it.
 mkdir -p "$INSTALL_DIR"
-mv "$tmp/innerwarden" "$INSTALL_DIR/innerwarden"
-chmod +x "$INSTALL_DIR/innerwarden"
+# Staged next to the target and renamed over it: never a half-written binary
+# under the real name, and a running copy keeps its old inode.
+staged="$INSTALL_DIR/.innerwarden.new.$$"
+cp "$tmp/innerwarden" "$staged"
+chmod 0755 "$staged"
+mv -f "$staged" "$INSTALL_DIR/innerwarden"
 ok "installed: $INSTALL_DIR/innerwarden"
+
+# Every directory from the install dir up to the root that another account
+# could write (group or other write bit, sticky /tmp-like dirs excluded),
+# listed in one line so the operator fixes them in one go.
+writable_dirs() {
+  d="$1"
+  while :; do
+    if [ -n "$(find -H "$d" -prune \( -perm -020 -o -perm -002 \) ! -perm -1000 2>/dev/null)" ]; then
+      printf ' %s' "$d"
+    fi
+    [ "$d" = "/" ] && break
+    parent="$(dirname "$d")"
+    [ "$parent" = "$d" ] && break
+    d="$parent"
+  done
+}
+loose="$(writable_dirs "$INSTALL_DIR")"
+if [ -n "$loose" ]; then
+  say "WARNING: another account can write to:${loose}"
+  say "  Active Defence refuses to run a CLI it cannot trust. Fix with:  chmod g-w,o-w${loose}"
+fi
 
 # `iw` is the human shortcut; `iw-guard` is the stable runtime name used when
 # Active Defence delegates Community agent configuration changes. Relative
@@ -167,9 +203,29 @@ for alias in iw iw-guard; do
 done
 ok "shortcuts: iw, iw-guard  →  innerwarden"
 
+# The login profile a bash login shell reads: the first of these that exists.
+login_profile() {
+  for f in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+    [ -f "$f" ] && { printf '%s' "$f"; return 0; }
+  done
+  return 1
+}
+
+# Ubuntu and Debian's stock ~/.profile adds ~/.local/bin when it exists. The
+# directory did not exist when this login started, so it is missing from the
+# current PATH yet comes back at the next login: say that, not "edit your rc"
+# (rc.2 install test P15).
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) : ;;
-  *) say "add to PATH:  export PATH=\"$INSTALL_DIR:\$PATH\"  (add to your shell rc)" ;;
+  *)
+    profile="$(login_profile || true)"
+    if [ "$INSTALL_DIR" = "$HOME/.local/bin" ] && [ -n "$profile" ] \
+       && grep -q '\.local/bin' "$profile" 2>/dev/null; then
+      say "on PATH from your next login: open a new login shell ($profile adds $INSTALL_DIR)"
+    else
+      say "add to PATH:  export PATH=\"$INSTALL_DIR:\$PATH\"  (add to your shell rc)"
+    fi
+    ;;
 esac
 
 # ── Anonymous install ping (opt-OUT) ─────────────────────────────────────────
