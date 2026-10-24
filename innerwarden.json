@@ -1,8 +1,8 @@
 {
   "version": "1.6.9",
-  "description": "InnerWarden Community Edition: a free, source-available AI-agent guardrail that screens shell commands and MCP tool calls before execution. No admin rights, no kernel.",
+  "description": "InnerWarden Community: a free, open-source (Apache-2.0) guardrail for AI agents that screens shell commands and MCP tool calls before they run. No admin rights, no kernel driver.",
   "homepage": "https://innerwarden.com",
-  "license": "Freeware",
+  "license": "Apache-2.0",
   "notes": [
     "Per-user install, no admin rights. Run 'innerwarden setup' for the guided onboarding.",
     "Tracks the rolling 'iw-guard' release; run 'scoop update innerwarden' after a new cut."
