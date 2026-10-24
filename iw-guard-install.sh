@@ -1,22 +1,22 @@
 #!/bin/sh
-# InnerWarden Community Edition installer - one command to put the AI-agent
-# guardrail on Linux or macOS. No sudo, no sensor, no kernel: a single
-# per-user binary named `innerwarden` that screens your AI agent's shell
-# commands / tool calls, flags risk by default, and can block in enforce mode
-# (71 ATR rules + injection + de-obfuscation + OWASP Agentic). The Windows
-# equivalent is `install.ps1`.
+# InnerWarden Community installer - one command to put the free (Apache-2.0)
+# AI-agent guardrail on Linux or macOS. No sudo, no sensor, no kernel: a
+# single per-user binary named `innerwarden` that screens the shell commands
+# your AI agent runs (parsed-command analysis) and its MCP tool calls (where
+# the vendored ATR agent threat rules apply), flags risk by default, and can
+# block in enforce mode. The Windows equivalent is `install.ps1`.
 #
-# The command is `innerwarden` - the SAME command InnerWarden Active Defence
-# uses, so what you learn here carries over 1:1 when you upgrade. A short
-# `iw` alias (InnerWarden's initials) is symlinked for convenience.
+# The command is `innerwarden`, the same command InnerWarden Pro uses, so
+# what you learn here carries over when you upgrade. A short `iw` alias
+# (InnerWarden's initials) is symlinked for convenience.
 #
-#   curl -fsSL https://github.com/InnerWarden/innerwarden-releases/releases/download/iw-guard/iw-guard-install.sh | sh
+#   curl -fsSL https://innerwarden.com/free | sh
 #
-# Env overrides:
+# Env overrides (set them on the `sh` side of the pipe, not before `curl`):
 #   IW_GUARD_DIR    install dir (default: ~/.local/bin)
 #   IW_GUARD_TAG    release tag to pull from (default: iw-guard, the rolling
-#                   Community Edition release; pin a version like
-#                   guard-v0.16.4 to freeze).
+#                   Community release). Pin a cut to freeze it:
+#                   curl -fsSL https://innerwarden.com/free | IW_GUARD_TAG=guard-v1.6.10 sh
 #   IW_GUARD_NO_HOOK=1   skip wiring the Claude Code PreToolUse hook
 set -eu
 
