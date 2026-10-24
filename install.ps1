@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-  Install InnerWarden on Windows: Community Edition (default), or Active Defence
-  host telemetry with -Full.
+  Install InnerWarden Community on Windows (experimental). InnerWarden Pro has
+  no Windows build today, so -Full stops with that message.
 
 .DESCRIPTION
   Default (no -Full): downloads the signed innerwarden.exe for this machine's
@@ -9,17 +9,15 @@
   InnerWarden, and adds that dir to the user PATH. It uses the rolling iw-guard
   Community release by default. No admin required.
 
-  -Full (elevated): downloads the latest signed InnerWarden Active Defence trio
-  (sensor + agent + ctl, x86_64), installs to %ProgramFiles%\InnerWarden with state under
-  %ProgramData%\InnerWarden, writes a Windows monitor-only config (ETW + integrity
-  collectors on, responder off / dry-run), and registers two boot-start SYSTEM
-  Scheduled Tasks. This is the Mac-parity light tier (spec 085); the Linux kernel
-  EDR (eBPF, Execution Gate) is Linux-only and not part of the Windows build.
+  -Full: reserved for InnerWarden Pro's Windows host telemetry (sensor + agent
+  + ctl, monitor only, spec 085). No release publishes those Windows binaries
+  today (InnerWarden Pro is Linux; its kernel enforcement is Linux-only), so -Full
+  stops before downloading anything and says so.
 
 .PARAMETER Version
   Release tag. With the default Community install, "latest" resolves to the
   rolling iw-guard tag (or pass a guard-v<version> tag to pin a frozen cut). With -Full,
-  "latest" resolves to the latest Active Defence release (or pass a v<version> tag).
+  "latest" would resolve to the latest InnerWarden Pro release (v<version>).
 
 .PARAMETER Full
   Install the full sensor+agent+ctl trio + boot-start service (needs Administrator).
@@ -159,6 +157,9 @@ function Install-VCRedist {
 }
 
 function Install-Full {
+  # No release ships the Windows sensor/agent/ctl trio (InnerWarden Pro is Linux
+  # today), so the download below would 404. Say so before touching anything.
+  throw "InnerWarden Pro has no Windows build today. Install InnerWarden Community without -Full: irm https://www.innerwarden.com/free.ps1 | iex"
   $admin = ([Security.Principal.WindowsPrincipal] `
       [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
       [Security.Principal.WindowsBuiltInRole]::Administrator)
