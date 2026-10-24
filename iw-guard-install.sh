@@ -188,7 +188,7 @@ writable_dirs() {
 loose="$(writable_dirs "$INSTALL_DIR")"
 if [ -n "$loose" ]; then
   say "WARNING: another account can write to:${loose}"
-  say "  Active Defence refuses to run a CLI it cannot trust. Fix with:  chmod g-w,o-w${loose}"
+  say "  InnerWarden Pro refuses to run a CLI it cannot trust. Fix with:  chmod g-w,o-w${loose}"
 fi
 
 # `iw` is the human shortcut; `iw-guard` is the stable runtime name used when
@@ -272,6 +272,7 @@ else
   printf '    innerwarden agents connect --all --monitor     connect detected agents now\n'
   printf '    innerwarden agents auto-connect --monitor      opt in for agents installed later\n'
   printf '    innerwarden --help        (or the short alias: iw --help)\n'
-  printf '  Community Edition: free, open source (Apache-2.0), on-device. Same innerwarden command\n'
-  printf '  as Active Defence (host EDR; Linux kernel enforcement) - upgrade never relearns.\n\n'
+  printf '  InnerWarden Community: free, open source (Apache-2.0), on-device. Same innerwarden\n'
+  printf '  command as InnerWarden Pro (paid; the host layer, Linux kernel enforcement), so\n'
+  printf '  upgrading never relearns.\n\n'
 fi
