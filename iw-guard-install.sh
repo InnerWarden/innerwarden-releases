@@ -234,8 +234,11 @@ esac
 # your IP (the server hashes ip+UTC-day+a server secret into a one-way dedup id
 # and discards the raw IP), no hostname, no path, no agent/config/runtime data.
 # Opt out any time with INNERWARDEN_NO_TELEMETRY=1. Skipped in CI so ephemeral
-# smoke-test runners don't inflate adoption. Best-effort: backgrounded with a 5s
-# timeout, never blocks or fails the install. Endpoint returns 204; see /privacy.
+# smoke-test runners don't inflate adoption. INNERWARDEN_PING_TAG=internal marks
+# InnerWarden's own machines (origin=internal), so they are never counted as
+# installs; only that exact word marks anything, and the server keeps only it.
+# Best-effort: backgrounded with a 5s timeout, never blocks or fails the
+# install. Endpoint returns 204; see /privacy.
 _iw_in_ci() {
   case "${CI:-}" in true|TRUE|1) return 0 ;; esac
   [ -n "${GITHUB_ACTIONS:-}${GITLAB_CI:-}${JENKINS_URL:-}${BUILDKITE:-}${CIRCLECI:-}${TF_BUILD:-}${DRONE:-}" ]
@@ -247,8 +250,12 @@ elif [ "${INNERWARDEN_NO_TELEMETRY:-0}" != "1" ]; then
   say "sending one anonymous install ping (version + OS + arch only, no IP or host data; opt out with INNERWARDEN_NO_TELEMETRY=1, see https://www.innerwarden.com/privacy)"
   # -L is required: the apex innerwarden.com 308-redirects to www, and curl -fsS
   # without -L silently drops the request (regression class fixed 2026-06-11).
+  iw_origin=""
+  if [ "${INNERWARDEN_PING_TAG:-}" = "internal" ]; then
+    iw_origin="&origin=internal"
+  fi
   curl -fsSL -m 5 \
-    "https://www.innerwarden.com/api/ping?v=${iw_ver:-community}&os=${os}&arch=${arch}&event=install&edition=community" \
+    "https://www.innerwarden.com/api/ping?v=${iw_ver:-community}&os=${os}&arch=${arch}&event=install&edition=community${iw_origin}" \
     >/dev/null 2>&1 &
 fi
 

@@ -8,7 +8,9 @@
 #      warning with the one chmod that fixes it;
 #   3. with a stock Ubuntu ~/.profile that adds ~/.local/bin the PATH hint
 #      says "new login shell", not "export PATH" (rc.2 P15); without one it
-#      still prints the export hint.
+#      still prints the export hint;
+#   4. the install ping carries origin=internal for exactly
+#      INNERWARDEN_PING_TAG=internal, and no origin otherwise.
 # Usage: sh tests/iw-guard-install-modes.sh   (exit 0 = pass)
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,6 +45,7 @@ case "\$url" in
   *.sha256) src="$work/release/bin.sha256" ;;
   *.sig) exit 22 ;;
   */innerwarden-*) src="$work/release/bin" ;;
+  */api/ping*) printf '%s\n' "\$url" >> "$work/pings"; exit 0 ;;
   *) exit 22 ;;
 esac
 cat "\$src" > "\$out"
@@ -91,6 +94,28 @@ case "$out2" in *"chmod g-w,o-w $home2/.local/bin"*) r=yes ;; *) r=no ;; esac
 check "the writable directory is named with its fix" yes "$r"
 case "$out2" in *"export PATH"*) r=yes ;; *) r=no ;; esac
 check "no profile: the export PATH hint stays" yes "$r"
+
+# Case 4: the install ping, run with a cleared environment so no CI variable
+# of the caller skips it.
+ping_url() { # ping_url <home> [INNERWARDEN_PING_TAG=...] -> the pinged URL
+  h="$1"; shift
+  mkdir -p "$h"; chmod 0755 "$h"; : > "$work/pings"
+  env -i HOME="$h" PATH="$work/stubs:/usr/bin:/bin:/usr/sbin:/sbin" \
+    IW_GUARD_ALLOW_UNSIGNED=1 IW_GUARD_NO_HOOK=1 "$@" \
+    sh "$installer" >/dev/null 2>&1
+  i=0; while [ ! -s "$work/pings" ] && [ "$i" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
+  cat "$work/pings"
+}
+case "$(ping_url "$work/home4" INNERWARDEN_PING_TAG=internal)" in
+  *"&edition=community&origin=internal") r=yes ;; *) r=no ;; esac
+check "INNERWARDEN_PING_TAG=internal: the ping says origin=internal" yes "$r"
+u="$(ping_url "$work/home5")"
+case "$u" in *api/ping*) r=yes ;; *) r=no ;; esac
+check "no tag: the ping is still sent" yes "$r"
+case "$u" in *origin=*) r=yes ;; *) r=no ;; esac
+check "no tag: the ping carries no origin" no "$r"
+case "$(ping_url "$work/home6" INNERWARDEN_PING_TAG=internalx)" in *origin=*) r=yes ;; *) r=no ;; esac
+check "another word: the ping carries no origin" no "$r"
 
 [ "$failures" -eq 0 ] || { echo "$failures check(s) failed"; exit 1; }
 echo "all checks passed"
